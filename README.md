@@ -5,9 +5,9 @@ This repository is not exactly match what we use at Trendyol.
 
 ## Usage
 
-```
+```hcl
 module "elasticsearch-01" {
-  source = "<redacted>/grafana-alloy.git//modules/openstack?ref=0.8.2"
+  source = "./modules/openstack"
 
   instance_tags = {
     environment = "prod"
