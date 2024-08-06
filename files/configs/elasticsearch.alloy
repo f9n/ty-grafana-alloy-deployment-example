@@ -1,0 +1,42 @@
+declare "elasticsearch_exporter_v1" {
+  argument "consul_datacenter" {
+    optional = false
+    comment  = "Consul datacenter"
+  }
+
+  argument "consul_filter_with_tags" {
+    optional = true
+    comment = "Filter consul services with tags"
+    default = "^.*$"
+  }
+
+  argument "metrics_forward" {
+    optional = false
+    comment  = "Where to send collected metrics."
+  }
+
+  argument "max_cache_size" {
+    comment = "The maximum number of elements to hold in the relabeling cache (default: 100000).  This should be at least 2x-5x your largest scrape target or samples appended rate."
+    optional = true
+  }
+
+  consul_service_collect_v1 "elasticsearch_exporter" {
+    consul_datacenter       = argument.consul_datacenter.value
+    consul_service          = "elasticsearch-exporter"
+    consul_filter_with_tags = argument.consul_filter_with_tags.value
+
+    metrics_job     = "elasticsearch-exporter"
+    metrics_forward = prometheus.relabel.svc.receiver
+  }
+
+  prometheus.relabel "svc" {
+    forward_to = [argument.metrics_forward.value]
+    max_cache_size = coalesce(argument.max_cache_size.value, 100000)
+
+    rule {
+      source_labels = ["__name__"]
+      regex = "(^go_.+$)"
+      action = "drop"
+    }
+  }
+}

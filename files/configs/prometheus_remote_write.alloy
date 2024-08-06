@@ -1,0 +1,50 @@
+declare "prometheus_remote_write_v1" {
+  argument "url" {
+    optional = false
+    comment  = "URL address"
+  }
+
+  local.file "instance_tags" {
+    filename = "/etc/os-vm-tags.json"
+  }
+
+  local.file "instance_organization" {
+    filename = "/etc/os-federation"
+  }
+
+  local.file "instance_region" {
+    filename = "/etc/os-region"
+  }
+
+  prometheus.remote_write "default" {
+    external_labels = {
+      _federation    = trim_space(local.file.instance_federation.content),
+      _region        = trim_space(local.file.instance_region.content),
+      _environment   = coalesce(json_decode(local.file.instance_tags.content)["environment"], "none"),
+      _metric_source = format("alloy/%s", env("CLUSTER_IDENTIFIER")),
+    }
+
+    endpoint {
+      url = argument.url.value
+
+      queue_config {
+        capacity             = 100000
+        max_shards           = 200
+        min_shards           = 8
+        max_samples_per_send = 30000
+        batch_send_deadline  = "10s"
+        min_backoff          = "100ms"
+        max_backoff          = "10s"
+      }
+    }
+
+    wal {
+      truncate_frequency = "5m"
+      max_keepalive_time = "10m"
+    }
+  }
+
+  export "receiver" {
+    value = prometheus.remote_write.default.receiver
+  }
+}

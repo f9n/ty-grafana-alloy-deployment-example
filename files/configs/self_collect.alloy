@@ -1,0 +1,56 @@
+declare "self_collect_v1" {
+  argument "consul_datacenter" {
+    optional = false
+    comment  = "Consul datacenter"
+  }
+
+  argument "metrics_forward" {
+    optional = false
+    comment  = "Where to send collected metrics."
+  }
+
+  argument "metrics_scrape_interval" {
+    optional = true
+    default = "15s"
+    comment  = "Metrics Scrape Interval"
+  }
+
+  argument "metrics_scrape_timeout" {
+    optional = true
+    default = "15s"
+    comment  = "Metrics Scrape Timeout"
+  }
+
+  prometheus.exporter.self "default" {
+  }
+
+  prometheus.exporter.process "default" {
+    track_children = false
+
+    matcher {
+      comm = ["alloy"]
+    }
+  }
+
+  prometheus.scrape "selfmonitor" {
+    targets = concat(
+      prometheus.exporter.self.default.targets,
+      prometheus.exporter.process.default.targets,
+    )
+
+    forward_to = [prometheus.relabel.selfmonitor.receiver]
+
+    scrape_interval = argument.metrics_scrape_interval.value
+    scrape_timeout  = argument.metrics_scrape_timeout.value
+  }
+
+  prometheus.relabel "selfmonitor" {
+    forward_to = [argument.metrics_forward.value]
+
+    rule {
+      action        = "replace"
+      target_label  = "cluster"
+      replacement   = env("CLUSTER_IDENTIFIER")
+    }
+  }
+}

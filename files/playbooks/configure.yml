@@ -1,0 +1,127 @@
+---
+# https://github.com/grafana/grafana-ansible-collection/blob/main/roles/alloy/defaults/main.yml
+- name: Install alloy
+  hosts: all
+  become: true
+  # serial: "10%"
+  serial: 1
+  vars:
+    grafana_alloy_secrets: /etc/os-grafana-alloy-secrets.json
+    os_federation: /etc/os-federation
+    os_region: /etc/os-region
+    os_provider: /etc/os-provider
+    os_vm_tags_path: /etc/os-vm-tags.json
+    root_path: "."
+    _healthcheck_endpoint: "http://{{ ansible_host }}:12345/-/ready"
+    _service_name: alloy
+  handlers:
+    - name: reload systemd daemon
+      command: systemctl daemon-reload
+      listen: "Restart Alloy Custom"
+
+    - name: restart alloy
+      ansible.builtin.service:
+        name: alloy
+        state: restarted
+      listen: "Restart Alloy Custom"
+
+    - name: Check alloy is started properly
+      ansible.builtin.include_tasks: "{{ root_path }}/tasks/ga-started.yml"
+      listen: "Restart Alloy Custom"
+
+    - name: reload_consul
+      service:
+        name: consul
+        state: reloaded
+  tasks:
+
+    - name: Gather secrets from vault on machine
+      ansible.builtin.shell: |
+        get-secrets-from-somewhere -D /etc/os-grafana-alloy-secrets.json
+
+    - name: Read grafana alloy secrets
+      ansible.builtin.slurp:
+        path: "{{ grafana_alloy_secrets }}"
+      register: alloy_secrets_file
+
+    - name: Read federation
+      ansible.builtin.slurp:
+        path: "{{ os_federation }}"
+      register: federation_file
+
+    - name: Read region
+      ansible.builtin.slurp:
+        path: "{{ os_region }}"
+      register: region_file
+
+    - name: Read provider
+      ansible.builtin.slurp:
+        path: "{{ os_provider }}"
+      register: provider_file
+
+    - name: Read os-vm-tags file content
+      ansible.builtin.slurp:
+        path: "{{ os_vm_tags_path }}"
+      register: vm_tags_file
+
+    - name: Load slurp content and Set facts
+      ansible.builtin.set_fact:
+        os_vm_tags: "{{ vm_tags_file['content'] | b64decode | from_json }}"
+        os_federation: "{{ federation_file['content'] | b64decode | trim }}"
+        os_region: "{{ region_file['content'] | b64decode | trim }}"
+        os_provider: "{{ provider_file['content'] | b64decode | trim }}"
+        grafana_alloy_secrets: "{{ alloy_secrets_file['content'] | b64decode | from_json }}"
+
+    - name: Generate cluster-identifier
+      ansible.builtin.set_fact:
+        cluster_provider_identifier: "{{ os_vm_tags.team }}-{{ os_vm_tags.environment }}-{{ os_vm_tags.cluster }}"
+        cluster_identifier: "{{ os_federation }}-{{ os_region }}-{{ os_vm_tags.team }}-{{ os_vm_tags.environment }}-{{ os_vm_tags.cluster }}"
+
+    - name: Create go_discover for openstack provider
+      ansible.builtin.set_fact:
+        go_discover_peers: "{{ 'provider=os tag_key=alloy_cluster tag_value={} domain_id={} region={} project_id={} user_name={} password={} auth_url={}'.format(cluster_provider_identifier, grafana_alloy_secrets.discover_os_domain_id, grafana_alloy_secrets.discover_os_region, grafana_alloy_secrets.discover_os_project_id, grafana_alloy_secrets.discover_os_user_name, grafana_alloy_secrets.discover_os_password, grafana_alloy_secrets.discover_os_auth_url) }}"
+      when: os_provider == "openstack"
+
+    - name: Show variables
+      ansible.builtin.debug:
+        msg: "go_discover_peers={{go_discover_peers}}, os_provider={{os_provider}}"
+
+    - name: Check provider for go_discover
+      ansible.builtin.fail:
+        msg: "The system may not be provisioned according to the provider ({{ os_provider }})."
+      when: os_provider != "openstack"
+
+    - name: Install alloy
+      ansible.builtin.include_role:
+        name: grafana.grafana.alloy
+      vars:
+        working_dir: /data
+        env_file_vars:
+          CLUSTER_IDENTIFIER: "{{ cluster_identifier }}"
+        alloy_flags_extra:
+          # For alloy 1.1.1 version (gomemlimit) https://github.com/grafana/alloy/pull/655
+          stability.level: "public-preview"
+          server.http.listen-addr: 0.0.0.0:12345
+          cluster.enabled: "true"
+          cluster.name: "{{ cluster_identifier }}"
+          cluster.rejoin-interval: 30s
+          cluster.max-join-peers: "61"
+          cluster.advertise-interfaces: all
+          cluster.discover-peers: "{{ go_discover_peers | quote }}"
+
+    - name: Ensure the directory /etc/systemd/system/alloy.service.d exists
+      ansible.builtin.file:
+        path: /etc/systemd/system/alloy.service.d
+        state: directory
+        mode: '0755'
+
+    - name: Create /etc/systemd/system/alloy.service.d/10-limits.conf
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/alloy.service.d/10-limits.conf
+        content: |
+          [Service]
+          MemoryMax=95%
+          LimitNOFILE=infinity
+          LimitNPROC=infinity
+        mode: '0644'
+      notify: Restart Alloy Custom

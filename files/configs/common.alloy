@@ -1,0 +1,200 @@
+declare "consul_service_collect_v1" {
+  argument "metrics_forward" {
+    optional = false
+    comment  = "Where to send collected metrics."
+  }
+
+  argument "metrics_job" {
+    optional = false
+    comment  = "Metrics job"
+  }
+
+  argument "metrics_path" {
+    optional = true
+    default = "/metrics"
+    comment  = "Metrics Path"
+  }
+
+  argument "metrics_scrape_interval" {
+    optional = true
+    default = "15s"
+    comment  = "Metrics Scrape Interval"
+  }
+
+  argument "metrics_scrape_timeout" {
+    optional = true
+    default = "15s"
+    comment  = "Metrics Scrape Timeout"
+  }
+
+  argument "consul_datacenter" {
+    optional = false
+    comment  = "Consul datacenter"
+  }
+
+  argument "consul_service" {
+    optional = false
+    comment  = "Consul service"
+  }
+
+  argument "consul_filter_with_tags" {
+    optional = true
+    comment = "Filter consul services with tags"
+    default = "^.*$"
+  }
+
+  discovery.consul "svc" {
+    server     = "0.0.0.0:8500"
+    datacenter = argument.consul_datacenter.value
+    services   = [argument.consul_service.value]
+    allow_stale = true
+  }
+
+  discovery.relabel "svc" {
+    targets = discovery.consul.svc.targets
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = argument.consul_filter_with_tags.value
+      action        = "keep"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){0}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){1}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){2}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){3}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){4}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){5}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){6}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){7}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){8}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){9}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){10}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){11}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){12}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){13}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){14}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){15}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){16}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+
+    rule {
+      source_labels = ["__meta_consul_tags"]
+      regex         = ",(?:[^,]+,){17}([^=]+)=([^,]+),.*"
+      target_label  = "${1}"
+      replacement   = "${2}"
+    }
+  }
+
+  prometheus.scrape "svc" {
+    clustering {
+      enabled = true
+    }
+    targets         = discovery.relabel.svc.output
+    forward_to      = [argument.metrics_forward.value]
+    job_name        = argument.metrics_job.value
+    scrape_interval = argument.metrics_scrape_interval.value
+    scrape_timeout  = argument.metrics_scrape_timeout.value
+    metrics_path    = argument.metrics_path.value
+  }
+}
